@@ -1,4 +1,9 @@
 import socket
+import pyrealsense2 as rs
+import numpy as np
+import cv2
+import json
+import png
 
 if __name__ == '__main__':
     s = socket.socket()

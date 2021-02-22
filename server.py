@@ -51,14 +51,14 @@ def get_request_type(header, pipeline, align):
     body = header[12:]
     body_obj = json.loads(body)
     header = header[:12]
-    patientid = body_obj['patientid']
-    caseid = body_obj['caseid']
     # msg_id length: 16 bits
     msg_id = header.hex()[16:20]
     # MSG_Heart
     if msg_id == MSG_Save:
         try:
             status = 1
+            patientid = body_obj['patientid']
+            caseid = body_obj['caseid']
             now = datetime.datetime.now()
             otherStyleTime = now.strftime("%Y%m%d%H%M%S")
             file_path = './img/' + patientid + '_' + caseid + '_' + otherStyleTime + '/'

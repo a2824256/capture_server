@@ -116,7 +116,7 @@ def get_return(data, pipeline, align):
     json_str = json.dumps(json_obj)
     # 计算总包长
     total_len = len(bytes(json_str, encoding='utf-8')) + 12
-    # 将总的包长度转为16进制字符串
+    # 将总的包长度转为16进制字符串，并去掉0x开头
     length_hex_str = hex(total_len).replace('0x', '')
     # 在总包长左侧补0填够8 bits
     length_bytes = bytes.fromhex(fitzero(length_hex_str, 8))

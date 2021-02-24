@@ -7,12 +7,15 @@ import json
 import png
 import datetime
 import os
+import struct
+import sys
 
 # 请求头数据
 headCode = b'\xff\xff\xff\xff'
 MSG_Heart = '0000'
-MSG_Save = '0002'
-MSG_Heart_Ack_Msg_id = b'\x00\x01'
+MSG_Save = '0200'
+MSG_Heart_Ack_Msg_id = b'\x01\x00'
+MSG_Save_Ack_Msg_id = b'\x03\x00'
 Crc_test = b'\x00'
 Reserved_test = b'\x00'
 
@@ -64,23 +67,27 @@ def get_return(data, pipeline, align):
     # length: 96 bits
     # 使用全局的status变量
     global status
-    # 获取content
-    body = data[12:]
-    # 字符串转json
-    body_obj = json.loads(body)
     # 获取请求头
     header = data[:12]
     # 获取msg_id
     msg_id = header.hex()[16:20]
+    MSG_id_bytes = MSG_Heart_Ack_Msg_id
     # 如果是采集操作
     if msg_id == MSG_Save:
-        try:
+        MSG_id_bytes = MSG_Save_Ack_Msg_id
+        # try:
+        # 获取content
+        body = data[12:]
+        if len(body) > 0:
+            # 字符串转json
+            body_obj = json.loads(body)
+            print("json:", body_obj)
             # 将摄像头设置为采集中状态
             status = 1
             # 获取patientid
-            patientid = body_obj['patientid']
+            patientid = body_obj['patientId']
             # 获取caseid
-            caseid = body_obj['caseid']
+            caseid = body_obj['caseId']
             # 获取当前时间戳
             now = datetime.datetime.now()
             # 格式化时间戳
@@ -105,9 +112,9 @@ def get_return(data, pipeline, align):
                     zgray2list = depth_image.tolist()
                     writer16.write(f, zgray2list)
             status = 0
-        except:
-            print('error')
-            status = 2
+        # except:
+        #     print('error')
+        #     status = 2
     # 创建一个json对象
     json_obj = {}
     # json返回的status为当前全局status
@@ -116,12 +123,9 @@ def get_return(data, pipeline, align):
     json_str = json.dumps(json_obj)
     # 计算总包长
     total_len = len(bytes(json_str, encoding='utf-8')) + 12
-    # 将总的包长度转为16进制字符串，并去掉0x开头
-    length_hex_str = hex(total_len).replace('0x', '')
-    # 在总包长左侧补0填够8 bits
-    length_bytes = bytes.fromhex(fitzero(length_hex_str, 8))
+    length_bytes = struct.pack("<i", total_len)
     # 拼接字节
-    content = headCode + length_bytes + MSG_Heart_Ack_Msg_id + Crc_test + Reserved_test + bytes(json_str, encoding='utf-8')
+    content = headCode + length_bytes + MSG_id_bytes + Crc_test + Reserved_test + bytes(json_str, encoding='utf-8')
     return content
 
 
@@ -151,14 +155,14 @@ if __name__ == '__main__':
 
     # socket部分
     s = socket.socket()
-    host = '127.0.0.1'
+    host = '172.18.6.13'
     print('host:', host)
     port = 60000
     s.bind((host, port))
     s.listen(5)
     print('start')
     while True:
-        try:
+        # try:
             c, addr = s.accept()
             print(addr, " connected")
             while True:
@@ -174,7 +178,7 @@ if __name__ == '__main__':
                         # 获取当前数据长度
                         curSize = len(all_data)
                         # 获取整个数据包的长度，Length部分
-                        allLen = int.from_bytes(rec_data[head_index + 4:head_index + 8], byteorder='big')
+                        allLen = int.from_bytes(rec_data[head_index + 4:head_index + 8], byteorder='little')
                         # 如果当前长度还没达到数据包的长度
                         while curSize < allLen:
                             # 继续获取数据
@@ -188,7 +192,8 @@ if __name__ == '__main__':
                         # 返回结果信息
                         c.send(content)
             print(addr, " disconnected")
-        except Exception as e:
-            print(e)
-            s.close()
-            exit()
+        # except Exception as e:
+        #     print('error')
+        #     # print(e)
+        #     # s.close()
+        #     # exit()

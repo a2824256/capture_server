@@ -9,6 +9,7 @@ import datetime
 import os
 import struct
 import sys
+socket.setdefaulttimeout(10)
 
 # 请求头数据
 headCode = b'\xff\xff\xff\xff'
@@ -18,6 +19,7 @@ MSG_Heart_Ack_Msg_id = b'\x01\x00'
 MSG_Save_Ack_Msg_id = b'\x03\x00'
 Crc_test = b'\x00'
 Reserved_test = b'\x00'
+capture_number = 5
 
 status = 0
 
@@ -75,46 +77,46 @@ def get_return(data, pipeline, align):
     # 如果是采集操作
     if msg_id == MSG_Save:
         MSG_id_bytes = MSG_Save_Ack_Msg_id
-        # try:
-        # 获取content
-        body = data[12:]
-        if len(body) > 0:
-            # 字符串转json
-            body_obj = json.loads(body)
-            print("json:", body_obj)
-            # 将摄像头设置为采集中状态
-            status = 1
-            # 获取patientid
-            patientid = body_obj['patientId']
-            # 获取caseid
-            caseid = body_obj['caseId']
-            # 获取当前时间戳
-            now = datetime.datetime.now()
-            # 格式化时间戳
-            otherStyleTime = now.strftime("%Y%m%d%H%M%S")
-            # 创建本次采样的路径
-            file_path = './img/' + patientid + '_' + caseid + '_' + otherStyleTime + '/'
-            # 创建文件夹
-            res = mkdir(file_path)
-            print(res)
-            print(file_path)
-            # 采集20对深度图和rgb图
-            for i in range(20):
-                # 获取深度图和rgb图
-                color_image, depth_image = get_aligned_images(pipeline, align)
-                # 创建16图像writer
-                writer16 = png.Writer(width=depth_image.shape[1], height=depth_image.shape[0],
-                                      bitdepth=16, greyscale=True)
-                # 保存rgb图
-                cv2.imwrite(file_path + str(i) + '_rgb.jpg', color_image)
-                # 保存16位深度图
-                with open(file_path + str(i) + '_depth.jpg', 'wb') as f:
-                    zgray2list = depth_image.tolist()
-                    writer16.write(f, zgray2list)
-            status = 0
-        # except:
-        #     print('error')
-        #     status = 2
+        try:
+            # 获取content
+            body = data[12:]
+            if len(body) > 0:
+                # 字符串转json
+                body_obj = json.loads(body)
+                print("json:", body_obj)
+                # 将摄像头设置为采集中状态
+                status = 1
+                # 获取patientid
+                patientid = body_obj['patientId']
+                # 获取caseid
+                caseid = body_obj['caseId']
+                # 获取当前时间戳
+                now = datetime.datetime.now()
+                # 格式化时间戳
+                otherStyleTime = now.strftime("%Y%m%d%H%M%S")
+                # 创建本次采样的路径
+                file_path = './img/' + patientid + '_' + caseid + '_' + otherStyleTime + '/'
+                # 创建文件夹
+                res = mkdir(file_path)
+                print(res)
+                print(file_path)
+                # 采集20对深度图和rgb图
+                for i in range(capture_number):
+                    # 获取深度图和rgb图
+                    color_image, depth_image = get_aligned_images(pipeline, align)
+                    # 创建16图像writer
+                    writer16 = png.Writer(width=depth_image.shape[1], height=depth_image.shape[0],
+                                          bitdepth=16, greyscale=True)
+                    # 保存rgb图
+                    cv2.imwrite(file_path + str(i) + '_rgb.jpg', color_image)
+                    # 保存16位深度图
+                    with open(file_path + str(i) + '_depth.jpg', 'wb') as f:
+                        zgray2list = depth_image.tolist()
+                        writer16.write(f, zgray2list)
+                status = 0
+        except:
+            print('error')
+            status = 2
     # 创建一个json对象
     json_obj = {}
     # json返回的status为当前全局status
@@ -150,50 +152,62 @@ if __name__ == '__main__':
     except:
         status = 2
 
-    # bak
-    # color_image, depth_image = get_aligned_images(pipeline, align)
-
     # socket部分
     s = socket.socket()
     host = '172.18.6.13'
+    # --------------测试---------------
+    # host = '127.0.0.1'
+    # --------------测试---------------
     print('host:', host)
     port = 60000
     s.bind((host, port))
     s.listen(5)
     print('start')
     while True:
-        # try:
+        try:
             c, addr = s.accept()
             print(addr, " connected")
+            counter = 0
             while True:
+                # c.recv()会导致程序停留在此一直等待消息到来
                 # 获取请求头
-                all_data = c.recv(12)
-                if len(all_data) > 0:
-                    # 设置为bytearray
-                    rec_data = bytearray(all_data)
-                    # 获取headCode
-                    head_index = all_data.find(b'\xff\xff\xff\xff')
-                    # 如果headCode在第一位，代表是一个数据包的开始
-                    if head_index == 0:
-                        # 获取当前数据长度
-                        curSize = len(all_data)
-                        # 获取整个数据包的长度，Length部分
-                        allLen = int.from_bytes(rec_data[head_index + 4:head_index + 8], byteorder='little')
-                        # 如果当前长度还没达到数据包的长度
-                        while curSize < allLen:
-                            # 继续获取数据
-                            data = c.recv(1024)
-                            # 将新的数据拼接到当前数据包末尾
-                            all_data += data
-                            # 更新数据包长度
-                            curSize += len(data)
-                        # 传入数据包获取返回结果
-                        content = get_return(all_data, pipeline, align)
-                        # 返回结果信息
-                        c.send(content)
-            print(addr, " disconnected")
-        # except Exception as e:
-        #     print('error')
-        #     # print(e)
-        #     # s.close()
-        #     # exit()
+                try:
+                    all_data = c.recv(12)
+                    if len(all_data) > 0:
+                        # 设置为bytearray
+                        rec_data = bytearray(all_data)
+                        print(rec_data)
+                        # 获取headCode
+                        head_index = all_data.find(b'\xff\xff\xff\xff')
+                        # 如果headCode在第一位，代表是一个数据包的开始
+                        if head_index == 0:
+                            # 获取当前数据长度
+                            curSize = len(all_data)
+                            # 获取整个数据包的长度，Length部分
+                            allLen = int.from_bytes(rec_data[head_index + 4:head_index + 8], byteorder='little')
+                            # 如果当前长度还没达到数据包的长度
+                            while curSize < allLen:
+                                # 继续获取数据
+                                data = c.recv(1024)
+                                # 将新的数据拼接到当前数据包末尾
+                                all_data += data
+                                # 更新数据包长度
+                                curSize += len(data)
+                            # 传入数据包获取返回结果
+                            # --------------测试---------------
+                            # pipeline = 0
+                            # align = 0
+                            # --------------测试---------------
+                            content = get_return(all_data, pipeline, align)
+                            print(content)
+                            # 返回结果信息
+                            c.send(content)
+                except Exception as e:
+                    print("error-2l", e)
+                    c.close()
+                    print(addr, " disconnected")
+                    break
+        except Exception as e:
+            print("error-1l", e)
+            continue
+    s.close()

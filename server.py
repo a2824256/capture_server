@@ -130,6 +130,16 @@ def get_return(data, pipeline, align):
     content = headCode + length_bytes + MSG_id_bytes + Crc_test + Reserved_test + bytes(json_str, encoding='utf-8')
     return content
 
+def write_start_log():
+    file_path = "./log"
+    file = open(file_path, 'w')
+    # 获取当前时间戳
+    now = datetime.datetime.now()
+    # 格式化时间戳
+    otherStyleTime = now.strftime("%Y-%m-%d %H:%M:%S")
+    file.write(otherStyleTime)
+    file.close()
+
 
 # 主函数
 if __name__ == '__main__':
@@ -151,7 +161,7 @@ if __name__ == '__main__':
         align = rs.align(align_to)
     except:
         status = 2
-
+    write_start_log()
     # socket部分
     s = socket.socket()
     host = '172.18.6.13'

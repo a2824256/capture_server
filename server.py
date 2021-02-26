@@ -213,11 +213,11 @@ if __name__ == '__main__':
                             # 返回结果信息
                             c.send(content)
                 except Exception as e:
-                    print("error-2l", e)
+                    # print("error-2l", e)
                     c.close()
                     print(addr, " disconnected")
                     break
         except Exception as e:
-            print("error-1l", e)
+            # print("error-1l", e)
             continue
     s.close()

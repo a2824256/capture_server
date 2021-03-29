@@ -127,16 +127,15 @@ def get_return(data, pipeline, align):
 
 # 主函数
 if __name__ == '__main__':
-    # 尝试开启intelrealsense摄像头
     try:
         # 创建管道
         pipeline = rs.pipeline()
         # 获取配置设置
         config = rs.config()
         # 设置深度图
-        config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+        config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 60)
         # 设置rgb图
-        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 60)
         # 开启管道
         profile = pipeline.start(config)
         # 获取彩色流对象

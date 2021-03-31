@@ -3,6 +3,12 @@ import time
 import numpy as np
 import pyrealsense2 as rs
 import cv2
+from threading import Lock,Thread
+import socket
+socket.setdefaulttimeout(10)
+
+global_nd_rgb = None
+global_nd_depth = None
 
 # 获取对齐的rgb与深度图
 def get_aligned_images(pipeline, align):
@@ -19,31 +25,37 @@ def get_aligned_images(pipeline, align):
     color_image = np.asanyarray(color_frame.get_data())
     return color_image, depth_image
 
+def camera_threading():
+    global global_nd_rgb, global_nd_depth
+    print('start')
+    pipeline = rs.pipeline()
+    # 获取配置设置
+    config = rs.config()
+    # 设置深度图
+    config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 60)
+    # 设置rgb图
+    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 60)
+    # 开启管道
+    profile = pipeline.start(config)
+    # 获取彩色流对象
+    align_to = rs.stream.color
+    # 获取对齐的流对象
+    align = rs.align(align_to)
+    while 1:
+        global_nd_rgb, global_nd_depth = get_aligned_images(pipeline, align)
+
 
 # 主函数
 if __name__ == '__main__':
     # 尝试开启intelrealsense摄像头
-    try:
-        # 创建管道
-        pipeline = rs.pipeline()
-        # 获取配置设置
-        config = rs.config()
-        # 设置深度图
-        config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 60)
-        # 设置rgb图
-        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 60)
-        # 开启管道
-        profile = pipeline.start(config)
-        # 获取彩色流对象
-        align_to = rs.stream.color
-        # 获取对齐的流对象
-        align = rs.align(align_to)
-
-        while 1:
-            color_image, depth_image = get_aligned_images(pipeline, align)
-            cv2.imshow('test', color_image)
-            cv2.waitKey(500)
-    except:
-        status = 2
-        print('close')
+    # try:
+    thread1 = Thread(target=camera_threading)
+    thread1.start()
+    while 1:
+        if type(global_nd_rgb) == np.ndarray:
+            cv2.imshow('test', global_nd_rgb)
+            cv2.waitKey(10)
+    # except:
+    #     status = 2
+    #     print('close')
 

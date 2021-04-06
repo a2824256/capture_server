@@ -9,6 +9,7 @@ socket.setdefaulttimeout(10)
 
 global_nd_rgb = None
 global_nd_depth = None
+STOP_SIG = False
 
 # 获取对齐的rgb与深度图
 def get_aligned_images(pipeline, align):
@@ -27,7 +28,7 @@ def get_aligned_images(pipeline, align):
 
 def camera_threading():
     global global_nd_rgb, global_nd_depth
-    print('start')
+    print('thread start')
     pipeline = rs.pipeline()
     # 获取配置设置
     config = rs.config()
@@ -42,20 +43,21 @@ def camera_threading():
     # 获取对齐的流对象
     align = rs.align(align_to)
     while 1:
+        if STOP_SIG:
+            print('thread exit')
+            exit()
         global_nd_rgb, global_nd_depth = get_aligned_images(pipeline, align)
 
 
 # 主函数
 if __name__ == '__main__':
-    # 尝试开启intelrealsense摄像头
-    # try:
-    thread1 = Thread(target=camera_threading)
-    thread1.start()
-    while 1:
-        if type(global_nd_rgb) == np.ndarray:
-            cv2.imshow('test', global_nd_rgb)
-            cv2.waitKey(10)
-    # except:
-    #     status = 2
-    #     print('close')
+    try:
+        thread1 = Thread(target=camera_threading)
+        thread1.start()
+        while 1:
+            if type(global_nd_rgb) == np.ndarray:
+                cv2.imshow('test', global_nd_rgb)
+                cv2.waitKey(10)
+    except:
+        STOP_SIG = True
 

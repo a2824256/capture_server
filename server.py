@@ -8,8 +8,10 @@ import png
 import datetime
 import os
 import struct
-import sys
+from socket import gethostbyname, gethostname
+from threading import Lock, Thread
 socket.setdefaulttimeout(10)
+
 
 # 请求头数据
 headCode = b'\xff\xff\xff\xff'
@@ -22,6 +24,12 @@ Reserved_test = b'\x00'
 capture_number = 5
 
 status = 0
+
+# 视频采集
+global_nd_rgb = None
+global_nd_depth = None
+STOP_SIG = False
+FIRST_TIPS = True
 
 # 创建文件夹函数
 # path：要创建的文件夹路径
@@ -65,10 +73,10 @@ def get_aligned_images(pipeline, align):
 # data：数据包
 # pipeline：intelrealsense管道
 # align：对齐数据流对象
-def get_return(data, pipeline, align):
+def get_return(data):
     # length: 96 bits
     # 使用全局的status变量
-    global status
+    global status, global_nd_rgb, global_nd_depth
     # 获取请求头
     header = data[:12]
     # 获取msg_id
@@ -103,7 +111,7 @@ def get_return(data, pipeline, align):
                 # 采集20对深度图和rgb图
                 for i in range(capture_number):
                     # 获取深度图和rgb图
-                    color_image, depth_image = get_aligned_images(pipeline, align)
+                    color_image, depth_image = global_nd_rgb, global_nd_depth
                     # 创建16图像writer
                     writer16 = png.Writer(width=depth_image.shape[1], height=depth_image.shape[0],
                                           bitdepth=16, greyscale=True)
@@ -140,9 +148,9 @@ def write_start_log():
     file.write(otherStyleTime)
     file.close()
 
-
-# 主函数
-if __name__ == '__main__':
+def camera_threading():
+    print('sub-thread start')
+    global global_nd_rgb, global_nd_depth
     try:
         # 创建管道
         pipeline = rs.pipeline()
@@ -158,65 +166,75 @@ if __name__ == '__main__':
         align_to = rs.stream.color
         # 获取对齐的流对象
         align = rs.align(align_to)
+        while True:
+            if STOP_SIG:
+                print('thread exit')
+                exit()
+            global_nd_rgb, global_nd_depth = get_aligned_images(pipeline, align)
     except:
-        status = 2
-    write_start_log()
+        print("camera connect fail")
+        exit()
+
+# 主函数
+if __name__ == '__main__':
+    thread1 = Thread(target=camera_threading)
+    thread1.start()
+    # write_start_log()
     # socket部分
     s = socket.socket()
-    host = '172.18.6.13'
     # --------------测试---------------
     # host = '127.0.0.1'
     # --------------测试---------------
+    # 获取局域网ip
+    host = gethostbyname(gethostname())
     print('host:', host)
     port = 60000
     s.bind((host, port))
     s.listen(5)
     print('start')
     while True:
-        try:
-            c, addr = s.accept()
-            print(addr, " connected")
-            counter = 0
-            while True:
-                # c.recv()会导致程序停留在此一直等待消息到来
-                # 获取请求头
-                try:
-                    all_data = c.recv(12)
-                    if len(all_data) > 0:
-                        # 设置为bytearray
-                        rec_data = bytearray(all_data)
-                        print(rec_data)
-                        # 获取headCode
-                        head_index = all_data.find(b'\xff\xff\xff\xff')
-                        # 如果headCode在第一位，代表是一个数据包的开始
-                        if head_index == 0:
-                            # 获取当前数据长度
-                            curSize = len(all_data)
-                            # 获取整个数据包的长度，Length部分
-                            allLen = int.from_bytes(rec_data[head_index + 4:head_index + 8], byteorder='little')
-                            # 如果当前长度还没达到数据包的长度
-                            while curSize < allLen:
-                                # 继续获取数据
-                                data = c.recv(1024)
-                                # 将新的数据拼接到当前数据包末尾
-                                all_data += data
-                                # 更新数据包长度
-                                curSize += len(data)
-                            # 传入数据包获取返回结果
-                            # --------------测试---------------
-                            # pipeline = 0
-                            # align = 0
-                            # --------------测试---------------
-                            content = get_return(all_data, pipeline, align)
-                            print(content)
-                            # 返回结果信息
-                            c.send(content)
-                except Exception as e:
-                    # print("error-2l", e)
-                    c.close()
-                    print(addr, " disconnected")
-                    break
-        except Exception as e:
-            # print("error-1l", e)
-            continue
+        if type(global_nd_rgb) == np.ndarray:
+            if FIRST_TIPS:
+                print('camera initialization successful')
+                FIRST_TIPS = False
+            try:
+                c, addr = s.accept()
+                print(addr, " connected")
+                counter = 0
+                while True:
+                    try:
+                        all_data = c.recv(12)
+                        if len(all_data) > 0:
+                            # 设置为bytearray
+                            rec_data = bytearray(all_data)
+                            print(rec_data)
+                            # 获取headCode
+                            head_index = all_data.find(b'\xff\xff\xff\xff')
+                            # 如果headCode在第一位，代表是一个数据包的开始
+                            if head_index == 0:
+                                # 获取当前数据长度
+                                curSize = len(all_data)
+                                # 获取整个数据包的长度，Length部分
+                                allLen = int.from_bytes(rec_data[head_index + 4:head_index + 8], byteorder='little')
+                                # 如果当前长度还没达到数据包的长度
+                                while curSize < allLen:
+                                    # 继续获取数据
+                                    data = c.recv(1024)
+                                    # 将新的数据拼接到当前数据包末尾
+                                    all_data += data
+                                    # 更新数据包长度
+                                    curSize += len(data)
+                                content = get_return(all_data)
+                                print(content)
+                                # 返回结果信息
+                                c.send(content)
+                    except Exception as e:
+                        # print("error-2l", e)
+                        c.close()
+                        print(addr, " disconnected")
+                        break
+            except Exception as e:
+                # print("error-1l", e)
+                continue
+    STOP_SIG = True
     s.close()

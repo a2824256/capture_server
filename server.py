@@ -8,20 +8,30 @@ import png
 import datetime
 import os
 import struct
+import time
 from socket import gethostbyname, gethostname
 from threading import Lock, Thread
 socket.setdefaulttimeout(10)
 
 
 # 请求头数据
+STORE_PATH = './img'
+buffer = 1024
 headCode = b'\xff\xff\xff\xff'
 MSG_Heart = '0000'
 MSG_Save = '0200'
+MSG_Video_Save = '0400'
+MSG_Video_Stop = '0600'
+MSG_Backup = '0800'
+
 MSG_Heart_Ack_Msg_id = b'\x01\x00'
 MSG_Save_Ack_Msg_id = b'\x03\x00'
+MSG_Save_Start_Ack = b'\x05\x00'
+MSG_Save_Stop_Ack = b'\x07\x00'
+MSG_Backup_Ack = b'\x09\x00'
 Crc_test = b'\x00'
 Reserved_test = b'\x00'
-capture_number = 5
+capture_number = 1
 
 status = 0
 
@@ -30,6 +40,73 @@ global_nd_rgb = None
 global_nd_depth = None
 STOP_SIG = False
 FIRST_TIPS = True
+RECORD_STOP_SIG = False
+FPS = 30.0
+FILE_COUNTER = 0
+
+def upload_files():
+    global FILE_COUNTER
+    print("备份开始\n")
+    try:
+        sk = socket.socket()
+        sk.connect(('172.18.5.10', 60008))
+        for _, dirs, _ in os.walk(STORE_PATH):
+            for dir in dirs:
+                if dir != '':
+                    path = os.path.join(STORE_PATH, dir)
+                    for _, _, files in os.walk(path):
+                        for file in files:
+                            FILE_COUNTER += 1
+        for _, dirs, _ in os.walk(STORE_PATH):
+            for dir in dirs:
+                if dir != '':
+                    for _, _, files in os.walk(os.path.join(STORE_PATH, dir)):
+                        for file in files:
+                            send_file(sk, dir, file)
+                            content = sk.recv(4)
+                            content = content.decode('utf-8')
+                            if '0' in content:
+                                os.remove(os.path.join(STORE_PATH, dir, file))
+        content = '上传结束\n'
+        print(content)
+        FILE_COUNTER = 0
+    except:
+        import traceback
+        traceback.print_exc()
+
+
+def send_file(sk, file_path, filename):
+    head = {'l': FILE_COUNTER,
+            'filepath': file_path,
+            'filename': filename,
+            'filesize': None}
+    file_path = os.path.join(STORE_PATH, file_path, head['filename'])
+    # 计算文件的大小
+    filesize = os.path.getsize(file_path)
+    head['filesize'] = filesize
+    json_head = json.dumps(head)  # 利用json将字典转成字符串
+    bytes_head = json_head.encode('utf-8')  # 字符串转bytes
+    # 计算head长度
+    head_len = len(bytes_head)  # 报头的长度
+    # 利用struct将int类型的数据打包成4个字节的byte，所以服务器端接受这个长度的时候可以固定缓冲区大小为4
+    pack_len = struct.pack('i', head_len)
+    # 先将报头长度发出去
+    sk.send(pack_len)
+    # 再发送bytes类型的报头
+    sk.send(bytes_head)
+    with open(file_path, 'rb') as f:
+        while filesize:
+            if filesize >= buffer:
+                content = f.read(buffer)  # 每次读取buffer字节大小内容
+                filesize -= buffer
+                sk.send(content)  # 发送读取的内容
+            else:
+                content = f.read(filesize)
+                sk.send(content)
+                filesize = 0
+                f.close()
+                break
+
 
 # 创建文件夹函数
 # path：要创建的文件夹路径
@@ -37,7 +114,6 @@ def mkdir(path):
     path = path.strip()
     path = path.rstrip("/")
     isExists = os.path.exists(path)
-
     if not isExists:
         os.makedirs(path)
         return True
@@ -69,6 +145,21 @@ def get_aligned_images(pipeline, align):
     color_image = np.asanyarray(color_frame.get_data())
     return color_image, depth_image
 
+def make_patient_dir(json_obj):
+    # 获取patientid
+    patientid = json_obj['patientId']
+    # 获取caseid
+    caseid = json_obj['caseId']
+    # 获取当前时间戳
+    now = datetime.datetime.now()
+    # 格式化时间戳
+    otherStyleTime = now.strftime("%Y%m%d%H%M%S")
+    # 创建本次采样的路径
+    file_path = STORE_PATH + '/' + str(patientid) + '_' + str(caseid) + '_' + str(otherStyleTime) + '/'
+    # 创建文件夹
+    return mkdir(file_path), file_path
+
+
 # 获取返回结果
 # data：数据包
 # pipeline：intelrealsense管道
@@ -94,20 +185,7 @@ def get_return(data):
                 print("json:", body_obj)
                 # 将摄像头设置为采集中状态
                 status = 1
-                # 获取patientid
-                patientid = body_obj['patientId']
-                # 获取caseid
-                caseid = body_obj['caseId']
-                # 获取当前时间戳
-                now = datetime.datetime.now()
-                # 格式化时间戳
-                otherStyleTime = now.strftime("%Y%m%d%H%M%S")
-                # 创建本次采样的路径
-                file_path = './img/' + patientid + '_' + caseid + '_' + otherStyleTime + '/'
-                # 创建文件夹
-                res = mkdir(file_path)
-                print(res)
-                print(file_path)
+                res, file_path = make_patient_dir(body_obj)
                 # 采集20对深度图和rgb图
                 for i in range(capture_number):
                     # 获取深度图和rgb图
@@ -115,6 +193,7 @@ def get_return(data):
                     # 创建16图像writer
                     writer16 = png.Writer(width=depth_image.shape[1], height=depth_image.shape[0],
                                           bitdepth=16, greyscale=True)
+                    print(file_path)
                     # 保存rgb图
                     cv2.imwrite(file_path + str(i) + '_rgb.jpg', color_image)
                     # 保存16位深度图
@@ -124,7 +203,28 @@ def get_return(data):
                 status = 0
         except:
             print('error')
-            status = 2
+            import traceback
+            traceback.print_exc()
+            status = 0
+
+    elif msg_id == MSG_Video_Save:
+        MSG_id_bytes = MSG_Save_Start_Ack
+        body = data[12:]
+        if len(body) > 0:
+            # 字符串转json
+            body_obj = json.loads(body)
+            print("json:", body_obj)
+            # 将摄像头设置为采集中状态
+            res, file_path = make_patient_dir(body_obj)
+            start_video_record(file_path)
+    elif msg_id == MSG_Video_Stop:
+        global RECORD_STOP_SIG
+        MSG_id_bytes = MSG_Save_Stop_Ack
+        RECORD_STOP_SIG = True
+    elif msg_id == MSG_Backup:
+        MSG_id_bytes = MSG_Backup_Ack
+        thread_backup = Thread(target=upload_files)
+        thread_backup.start()
     # 创建一个json对象
     json_obj = {}
     # json返回的status为当前全局status
@@ -147,6 +247,27 @@ def write_start_log():
     otherStyleTime = now.strftime("%Y-%m-%d %H:%M:%S")
     file.write(otherStyleTime)
     file.close()
+
+def start_video_record(path):
+    thread = Thread(target=video_record_threading, args=(path,))
+    thread.start()
+
+def video_record_threading(path):
+    global RECORD_STOP_SIG
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    t = time.time()
+    out = cv2.VideoWriter(os.path.join(path, str(t) + '.avi'), fourcc, 30, (640, 480))
+    try:
+        while True:
+            if RECORD_STOP_SIG:
+                break
+            out.write(global_nd_rgb)
+            time.sleep(0.01)
+        out.release()
+        RECORD_STOP_SIG = False
+    except:
+        out.release()
+        RECORD_STOP_SIG = False
 
 def camera_threading():
     print('sub-thread start')

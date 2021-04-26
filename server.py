@@ -23,12 +23,14 @@ MSG_Save = '0200'
 MSG_Video_Save = '0400'
 MSG_Video_Stop = '0600'
 MSG_Backup = '0800'
+MSG_Open_DepthCamera = '1000'
 
 MSG_Heart_Ack_Msg_id = b'\x01\x00'
 MSG_Save_Ack_Msg_id = b'\x03\x00'
 MSG_Save_Start_Ack = b'\x05\x00'
 MSG_Save_Stop_Ack = b'\x07\x00'
 MSG_Backup_Ack = b'\x09\x00'
+MSG_Open_DepthCamera_Ack = b'\x11\x00'
 Crc_test = b'\x00'
 Reserved_test = b'\x00'
 capture_number = 1
@@ -43,6 +45,7 @@ FIRST_TIPS = True
 RECORD_STOP_SIG = False
 FPS = 30.0
 FILE_COUNTER = 0
+CAMERA_IS_OPEN = False
 
 def upload_files():
     global FILE_COUNTER
@@ -165,6 +168,7 @@ def make_patient_dir(json_obj):
 # pipeline：intelrealsense管道
 # align：对齐数据流对象
 def get_return(data):
+    global FIRST_TIPS, CAMERA_IS_OPEN
     # length: 96 bits
     # 使用全局的status变量
     global status, global_nd_rgb, global_nd_depth
@@ -173,58 +177,69 @@ def get_return(data):
     # 获取msg_id
     msg_id = header.hex()[16:20]
     MSG_id_bytes = MSG_Heart_Ack_Msg_id
-    # 如果是采集操作
-    if msg_id == MSG_Save:
-        MSG_id_bytes = MSG_Save_Ack_Msg_id
-        try:
-            # 获取content
-            body = data[12:]
-            if len(body) > 0:
-                # 字符串转json
-                body_obj = json.loads(body)
-                print("json:", body_obj)
-                # 将摄像头设置为采集中状态
-                status = 1
-                res, file_path = make_patient_dir(body_obj)
-                # 采集20对深度图和rgb图
-                for i in range(capture_number):
-                    # 获取深度图和rgb图
-                    color_image, depth_image = global_nd_rgb, global_nd_depth
-                    # 创建16图像writer
-                    writer16 = png.Writer(width=depth_image.shape[1], height=depth_image.shape[0],
-                                          bitdepth=16, greyscale=True)
-                    print(file_path)
-                    # 保存rgb图
-                    cv2.imwrite(file_path + str(i) + '_rgb.jpg', color_image)
-                    # 保存16位深度图
-                    with open(file_path + str(i) + '_depth.jpg', 'wb') as f:
-                        zgray2list = depth_image.tolist()
-                        writer16.write(f, zgray2list)
-                status = 0
-        except:
-            print('error')
-            import traceback
-            traceback.print_exc()
-            status = 0
-
-    elif msg_id == MSG_Video_Save:
-        MSG_id_bytes = MSG_Save_Start_Ack
-        body = data[12:]
-        if len(body) > 0:
-            # 字符串转json
-            body_obj = json.loads(body)
-            print("json:", body_obj)
-            # 将摄像头设置为采集中状态
-            res, file_path = make_patient_dir(body_obj)
-            start_video_record(file_path)
-    elif msg_id == MSG_Video_Stop:
-        global RECORD_STOP_SIG
-        MSG_id_bytes = MSG_Save_Stop_Ack
-        RECORD_STOP_SIG = True
-    elif msg_id == MSG_Backup:
-        MSG_id_bytes = MSG_Backup_Ack
-        thread_backup = Thread(target=upload_files)
-        thread_backup.start()
+    if CAMERA_IS_OPEN:
+        if type(global_nd_rgb) == np.ndarray:
+            if FIRST_TIPS:
+                print('camera initialization successful')
+                FIRST_TIPS = False
+            else:
+                if msg_id == MSG_Save:
+                    MSG_id_bytes = MSG_Save_Ack_Msg_id
+                    try:
+                        # 获取content
+                        body = data[12:]
+                        if len(body) > 0:
+                            # 字符串转json
+                            body_obj = json.loads(body)
+                            print("json:", body_obj)
+                            # 将摄像头设置为采集中状态
+                            status = 1
+                            res, file_path = make_patient_dir(body_obj)
+                            # 采集20对深度图和rgb图
+                            for i in range(capture_number):
+                                # 获取深度图和rgb图
+                                color_image, depth_image = global_nd_rgb, global_nd_depth
+                                # 创建16图像writer
+                                writer16 = png.Writer(width=depth_image.shape[1], height=depth_image.shape[0],
+                                                      bitdepth=16, greyscale=True)
+                                print(file_path)
+                                # 保存rgb图
+                                cv2.imwrite(file_path + str(i) + '_rgb.jpg', color_image)
+                                # 保存16位深度图
+                                with open(file_path + str(i) + '_depth.jpg', 'wb') as f:
+                                    zgray2list = depth_image.tolist()
+                                    writer16.write(f, zgray2list)
+                            status = 0
+                    except:
+                        print('error')
+                        import traceback
+                        traceback.print_exc()
+                        status = 0
+                elif msg_id == MSG_Video_Save:
+                    MSG_id_bytes = MSG_Save_Start_Ack
+                    body = data[12:]
+                    if len(body) > 0:
+                        # 字符串转json
+                        body_obj = json.loads(body)
+                        print("json:", body_obj)
+                        # 将摄像头设置为采集中状态
+                        res, file_path = make_patient_dir(body_obj)
+                        start_video_record(file_path)
+                elif msg_id == MSG_Video_Stop:
+                    global RECORD_STOP_SIG
+                    MSG_id_bytes = MSG_Save_Stop_Ack
+                    RECORD_STOP_SIG = True
+    else:
+        status = 4
+    if msg_id == MSG_Open_DepthCamera:
+        thread1 = Thread(target=camera_threading)
+        thread1.start()
+        status = 0
+        CAMERA_IS_OPEN = True
+    if msg_id == MSG_Backup:
+            MSG_id_bytes = MSG_Backup_Ack
+            thread_backup = Thread(target=upload_files)
+            thread_backup.start()
     # 创建一个json对象
     json_obj = {}
     # json返回的status为当前全局status
@@ -298,8 +313,6 @@ def camera_threading():
 
 # 主函数
 if __name__ == '__main__':
-    thread1 = Thread(target=camera_threading)
-    thread1.start()
     # write_start_log()
     # socket部分
     s = socket.socket()
@@ -314,48 +327,44 @@ if __name__ == '__main__':
     s.listen(5)
     print('start')
     while True:
-        if type(global_nd_rgb) == np.ndarray:
-            if FIRST_TIPS:
-                print('camera initialization successful')
-                FIRST_TIPS = False
-            try:
-                c, addr = s.accept()
-                print(addr, " connected")
-                counter = 0
-                while True:
-                    try:
-                        all_data = c.recv(12)
-                        if len(all_data) > 0:
-                            # 设置为bytearray
-                            rec_data = bytearray(all_data)
-                            print(rec_data)
-                            # 获取headCode
-                            head_index = all_data.find(b'\xff\xff\xff\xff')
-                            # 如果headCode在第一位，代表是一个数据包的开始
-                            if head_index == 0:
-                                # 获取当前数据长度
-                                curSize = len(all_data)
-                                # 获取整个数据包的长度，Length部分
-                                allLen = int.from_bytes(rec_data[head_index + 4:head_index + 8], byteorder='little')
-                                # 如果当前长度还没达到数据包的长度
-                                while curSize < allLen:
-                                    # 继续获取数据
-                                    data = c.recv(1024)
-                                    # 将新的数据拼接到当前数据包末尾
-                                    all_data += data
-                                    # 更新数据包长度
-                                    curSize += len(data)
-                                content = get_return(all_data)
-                                print(content)
-                                # 返回结果信息
-                                c.send(content)
-                    except Exception as e:
-                        # print("error-2l", e)
-                        c.close()
-                        print(addr, " disconnected")
-                        break
-            except Exception as e:
-                # print("error-1l", e)
-                continue
+        try:
+            c, addr = s.accept()
+            print(addr, " connected")
+            counter = 0
+            while True:
+                try:
+                    all_data = c.recv(12)
+                    if len(all_data) > 0:
+                        # 设置为bytearray
+                        rec_data = bytearray(all_data)
+                        print(rec_data)
+                        # 获取headCode
+                        head_index = all_data.find(b'\xff\xff\xff\xff')
+                        # 如果headCode在第一位，代表是一个数据包的开始
+                        if head_index == 0:
+                            # 获取当前数据长度
+                            curSize = len(all_data)
+                            # 获取整个数据包的长度，Length部分
+                            allLen = int.from_bytes(rec_data[head_index + 4:head_index + 8], byteorder='little')
+                            # 如果当前长度还没达到数据包的长度
+                            while curSize < allLen:
+                                # 继续获取数据
+                                data = c.recv(1024)
+                                # 将新的数据拼接到当前数据包末尾
+                                all_data += data
+                                # 更新数据包长度
+                                curSize += len(data)
+                            content = get_return(all_data)
+                            print(content)
+                            # 返回结果信息
+                            c.send(content)
+                except Exception as e:
+                    # print("error-2l", e)
+                    c.close()
+                    print(addr, " disconnected")
+                    break
+        except Exception as e:
+            # print("error-1l", e)
+            continue
     STOP_SIG = True
     s.close()

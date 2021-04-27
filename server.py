@@ -23,14 +23,14 @@ MSG_Save = '0200'
 MSG_Video_Save = '0400'
 MSG_Video_Stop = '0600'
 MSG_Backup = '0800'
-MSG_Open_DepthCamera = '1000'
+MSG_Open_DepthCamera = '0a00'
 
 MSG_Heart_Ack_Msg_id = b'\x01\x00'
 MSG_Save_Ack_Msg_id = b'\x03\x00'
 MSG_Save_Start_Ack = b'\x05\x00'
 MSG_Save_Stop_Ack = b'\x07\x00'
 MSG_Backup_Ack = b'\x09\x00'
-MSG_Open_DepthCamera_Ack = b'\x11\x00'
+MSG_Open_DepthCamera_Ack = b'\x0b\x00'
 Crc_test = b'\x00'
 Reserved_test = b'\x00'
 capture_number = 1
@@ -232,10 +232,11 @@ def get_return(data):
     else:
         status = 4
     if msg_id == MSG_Open_DepthCamera:
-        thread1 = Thread(target=camera_threading)
-        thread1.start()
-        status = 0
-        CAMERA_IS_OPEN = True
+        if CAMERA_IS_OPEN == False:
+            thread1 = Thread(target=camera_threading)
+            thread1.start()
+            status = 0
+            CAMERA_IS_OPEN = True
     if msg_id == MSG_Backup:
             MSG_id_bytes = MSG_Backup_Ack
             thread_backup = Thread(target=upload_files)

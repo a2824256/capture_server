@@ -183,6 +183,7 @@ def get_return(data):
                 print('camera initialization successful')
                 FIRST_TIPS = False
             else:
+                status = 0
                 if msg_id == MSG_Save:
                     MSG_id_bytes = MSG_Save_Ack_Msg_id
                     try:

@@ -176,6 +176,7 @@ def get_return(data):
     header = data[:12]
     # 获取msg_id
     msg_id = header.hex()[16:20]
+    print(msg_id)
     MSG_id_bytes = MSG_Heart_Ack_Msg_id
     if CAMERA_IS_OPEN:
         if type(global_nd_rgb) == np.ndarray:
@@ -339,7 +340,7 @@ if __name__ == '__main__':
                     if len(all_data) > 0:
                         # 设置为bytearray
                         rec_data = bytearray(all_data)
-                        print(rec_data)
+                        # print(rec_data)
                         # 获取headCode
                         head_index = all_data.find(b'\xff\xff\xff\xff')
                         # 如果headCode在第一位，代表是一个数据包的开始
@@ -357,7 +358,7 @@ if __name__ == '__main__':
                                 # 更新数据包长度
                                 curSize += len(data)
                             content = get_return(all_data)
-                            print(content)
+                            # print(content)
                             # 返回结果信息
                             c.send(content)
                 except Exception as e:

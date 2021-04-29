@@ -79,6 +79,7 @@ def upload_files():
                             except:
                                 print("返回状态码异常", content)
                                 continue
+                            time.sleep(1)
         content = '上传结束\n'
         print(content)
         FILE_COUNTER = 0

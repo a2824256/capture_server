@@ -308,7 +308,7 @@ def video_record_threading(path):
                 print("五分钟时间到，视频录制结束")
                 break
             out.write(global_nd_rgb)
-            time.sleep(0.01)
+            # time.sleep(0.01)
         out.release()
         RECORD_STOP_SIG = False
         RECORD_IN_PROGRESS = False

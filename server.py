@@ -15,6 +15,7 @@ socket.setdefaulttimeout(10)
 
 
 # 请求头数据
+pipeline = None
 STORE_PATH = './img'
 buffer = 1024
 headCode = b'\xff\xff\xff\xff'
@@ -325,8 +326,7 @@ def video_record_threading(path):
 
 def camera_threading():
     print('sub-thread start')
-    global global_nd_rgb, global_nd_depth
-    pipeline = None
+    global global_nd_rgb, global_nd_depth, pipeline
     try:
         # 创建管道
         pipeline = rs.pipeline()
@@ -410,3 +410,5 @@ if __name__ == '__main__':
             continue
     STOP_SIG = True
     s.close()
+    if pipeline is not None:
+        pipeline.stop()

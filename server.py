@@ -72,9 +72,13 @@ def upload_files():
                         for file in files:
                             send_file(sk, dir, file)
                             content = sk.recv(4)
-                            content = content.decode('utf-8')
-                            if '0' in content:
-                                os.remove(os.path.join(STORE_PATH, dir, file))
+                            try:
+                                content = content.decode('utf-8')
+                                if '0' in content:
+                                    os.remove(os.path.join(STORE_PATH, dir, file))
+                            except:
+                                print("返回状态码异常", content)
+                                continue
         content = '上传结束\n'
         print(content)
         FILE_COUNTER = 0
@@ -104,7 +108,7 @@ def send_file(sk, file_path, filename):
     sk.send(pack_len)
     # 再发送bytes类型的报头
     sk.send(bytes_head)
-    with open(file_path, 'rb', encoding='utf-8') as f:
+    with open(file_path, 'rb') as f:
         while filesize:
             if filesize >= buffer:
                 content = f.read(buffer)  # 每次读取buffer字节大小内容
@@ -245,10 +249,13 @@ def get_return(data):
                     else:
                         print("视频正在录制无法重复启动线程或摄像头未开启")
                 elif msg_id == MSG_Video_Stop:
-                    global RECORD_STOP_SIG
-                    MSG_id_bytes = MSG_Save_Stop_Ack
-                    RECORD_STOP_SIG = True
-                    print("收到录制结束信号")
+                    if RECORD_IN_PROGRESS:
+                        global RECORD_STOP_SIG
+                        MSG_id_bytes = MSG_Save_Stop_Ack
+                        RECORD_STOP_SIG = True
+                        print("收到录制结束信号")
+                    else:
+                        print("不在录制状态下，无法结束录制")
     else:
         status = 4
     if msg_id == MSG_Open_DepthCamera:

@@ -251,8 +251,8 @@ def get_return(data):
             status = 0
             CAMERA_IS_OPEN = True
     if msg_id == MSG_Backup:
-            MSG_id_bytes = MSG_Backup_Ack
             if BACKUP_IN_PROGRESS is False:
+                MSG_id_bytes = MSG_Backup_Ack
                 thread_backup = Thread(target=upload_files)
                 thread_backup.start()
     # 创建一个json对象

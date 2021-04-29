@@ -104,7 +104,7 @@ def send_file(sk, file_path, filename):
     sk.send(pack_len)
     # 再发送bytes类型的报头
     sk.send(bytes_head)
-    with open(file_path, 'rb') as f:
+    with open(file_path, 'rb', encoding='utf-8') as f:
         while filesize:
             if filesize >= buffer:
                 content = f.read(buffer)  # 每次读取buffer字节大小内容
@@ -300,11 +300,11 @@ def video_record_threading(path):
     t = time.time()
     out = cv2.VideoWriter(os.path.join(path, str(t) + '.avi'), fourcc, 30, (640, 480))
     try:
-        ts = time.time()
+        ts = datetime.datetime.now()
         while True:
             if RECORD_STOP_SIG:
                 break
-            te = time.time()
+            te = datetime.datetime.now()
             sec = te - ts
             if int(sec.seconds) > 300:
                 print(sec.seconds)

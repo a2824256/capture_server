@@ -305,7 +305,7 @@ def video_record_threading(path):
             if RECORD_STOP_SIG:
                 break
             te = time.time()
-            sec = datetime.datetime.fromtimestamp(ts)-datetime.datetime.fromtimestamp(te)
+            sec = te - ts
             if int(sec.seconds) > 300:
                 print(sec.seconds)
                 print("五分钟时间到，视频录制结束")

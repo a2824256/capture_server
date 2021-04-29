@@ -46,9 +46,13 @@ RECORD_STOP_SIG = False
 FPS = 30.0
 FILE_COUNTER = 0
 CAMERA_IS_OPEN = False
+BACKUP_IN_PROGRESS = False
+CAPTURE_IN_PROGRESS = False
+RECORD_IN_PROGRESS = False
 
 def upload_files():
-    global FILE_COUNTER
+    global FILE_COUNTER, BACKUP_IN_PROGRESS
+    BACKUP_IN_PROGRESS = True
     print("备份开始\n")
     try:
         sk = socket.socket()
@@ -73,9 +77,11 @@ def upload_files():
         content = '上传结束\n'
         print(content)
         FILE_COUNTER = 0
+        BACKUP_IN_PROGRESS = False
     except:
         import traceback
         traceback.print_exc()
+        BACKUP_IN_PROGRESS = False
 
 
 def send_file(sk, file_path, filename):
@@ -185,7 +191,9 @@ def get_return(data):
                 FIRST_TIPS = False
             else:
                 status = 0
-                if msg_id == MSG_Save:
+                if msg_id == MSG_Save and CAPTURE_IN_PROGRESS is False:
+                    global CAPTURE_IN_PROGRESS
+                    CAPTURE_IN_PROGRESS = True
                     MSG_id_bytes = MSG_Save_Ack_Msg_id
                     try:
                         # 获取content
@@ -212,11 +220,14 @@ def get_return(data):
                                     zgray2list = depth_image.tolist()
                                     writer16.write(f, zgray2list)
                             status = 0
+                        CAPTURE_IN_PROGRESS = False
+
                     except:
                         print('error')
                         import traceback
                         traceback.print_exc()
                         status = 0
+                        CAPTURE_IN_PROGRESS = False
                 elif msg_id == MSG_Video_Save:
                     MSG_id_bytes = MSG_Save_Start_Ack
                     body = data[12:]
@@ -241,8 +252,9 @@ def get_return(data):
             CAMERA_IS_OPEN = True
     if msg_id == MSG_Backup:
             MSG_id_bytes = MSG_Backup_Ack
-            thread_backup = Thread(target=upload_files)
-            thread_backup.start()
+            if BACKUP_IN_PROGRESS is False:
+                thread_backup = Thread(target=upload_files)
+                thread_backup.start()
     # 创建一个json对象
     json_obj = {}
     # json返回的status为当前全局status
@@ -267,11 +279,13 @@ def write_start_log():
     file.close()
 
 def start_video_record(path):
-    thread = Thread(target=video_record_threading, args=(path,))
-    thread.start()
+    if RECORD_IN_PROGRESS is False:
+        thread = Thread(target=video_record_threading, args=(path,))
+        thread.start()
 
 def video_record_threading(path):
-    global RECORD_STOP_SIG
+    global RECORD_STOP_SIG, RECORD_IN_PROGRESS
+    RECORD_IN_PROGRESS = True
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     t = time.time()
     out = cv2.VideoWriter(os.path.join(path, str(t) + '.avi'), fourcc, 30, (640, 480))
@@ -283,13 +297,16 @@ def video_record_threading(path):
             time.sleep(0.01)
         out.release()
         RECORD_STOP_SIG = False
+        RECORD_IN_PROGRESS = False
     except:
         out.release()
         RECORD_STOP_SIG = False
+        RECORD_IN_PROGRESS = False
 
 def camera_threading():
     print('sub-thread start')
     global global_nd_rgb, global_nd_depth
+    pipeline = None
     try:
         # 创建管道
         pipeline = rs.pipeline()
@@ -307,10 +324,12 @@ def camera_threading():
         align = rs.align(align_to)
         while True:
             if STOP_SIG:
+                pipeline.stop()
                 print('thread exit')
-                exit()
+                break
             global_nd_rgb, global_nd_depth = get_aligned_images(pipeline, align)
     except:
+        pipeline.stop()
         print("camera connect fail")
         exit()
 

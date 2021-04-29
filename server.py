@@ -56,7 +56,7 @@ def upload_files():
     print("备份开始\n")
     try:
         sk = socket.socket()
-        sk.connect(('172.18.5.10', 60008))
+        sk.connect(('172.18.6.8', 60008))
         for _, dirs, _ in os.walk(STORE_PATH):
             for dir in dirs:
                 if dir != '':
@@ -360,7 +360,7 @@ if __name__ == '__main__':
     # host = '127.0.0.1'
     # --------------测试---------------
     # 获取局域网ip
-    host = gethostbyname(gethostname())
+    host = "172.18.6.6"
     print('host:', host)
     port = 60000
     s.bind((host, port))

@@ -232,6 +232,7 @@ def get_return(data):
                 elif msg_id == MSG_Video_Save:
                     MSG_id_bytes = MSG_Save_Start_Ack
                     if RECORD_IN_PROGRESS is False:
+                        print("收到开始录制信号")
                         body = data[12:]
                         if len(body) > 0:
                             # 字符串转json
@@ -305,6 +306,7 @@ def video_record_threading(path):
             te = time.time()
             sec = datetime.datetime.fromtimestamp(ts)-datetime.datetime.fromtimestamp(te)
             if int(sec.seconds) > 300:
+                print(sec.seconds)
                 print("五分钟时间到，视频录制结束")
                 break
             out.write(global_nd_rgb)

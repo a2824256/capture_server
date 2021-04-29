@@ -232,7 +232,7 @@ def get_return(data):
                         CAPTURE_IN_PROGRESS = False
                 elif msg_id == MSG_Video_Save:
                     MSG_id_bytes = MSG_Save_Start_Ack
-                    if RECORD_IN_PROGRESS is False:
+                    if RECORD_IN_PROGRESS is False and CAMERA_IS_OPEN is True:
                         print("收到开始录制信号")
                         body = data[12:]
                         if len(body) > 0:
@@ -243,7 +243,7 @@ def get_return(data):
                             res, file_path = make_patient_dir(body_obj)
                             start_video_record(file_path)
                     else:
-                        print("视频正在录制无法重复启动线程")
+                        print("视频正在录制无法重复启动线程或摄像头未开启")
                 elif msg_id == MSG_Video_Stop:
                     global RECORD_STOP_SIG
                     MSG_id_bytes = MSG_Save_Stop_Ack

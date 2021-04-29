@@ -313,6 +313,8 @@ def video_record_threading(path):
             out.write(global_nd_rgb)
             # time.sleep(0.01)
         out.release()
+        print("RECORD_STOP_SIG:", RECORD_STOP_SIG)
+        print("RECORD_IN_PROGRESS:", RECORD_IN_PROGRESS)
         RECORD_STOP_SIG = False
         RECORD_IN_PROGRESS = False
         print("录制结束")

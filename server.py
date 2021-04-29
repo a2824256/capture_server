@@ -182,7 +182,8 @@ def get_return(data):
     header = data[:12]
     # 获取msg_id
     msg_id = header.hex()[16:20]
-    print(msg_id)
+    if str(msg_id) != '0000':
+        print(msg_id)
     MSG_id_bytes = MSG_Heart_Ack_Msg_id
     if CAMERA_IS_OPEN:
         if type(global_nd_rgb) == np.ndarray:
@@ -230,18 +231,22 @@ def get_return(data):
                         CAPTURE_IN_PROGRESS = False
                 elif msg_id == MSG_Video_Save:
                     MSG_id_bytes = MSG_Save_Start_Ack
-                    body = data[12:]
-                    if len(body) > 0:
-                        # 字符串转json
-                        body_obj = json.loads(body)
-                        print("json:", body_obj)
-                        # 将摄像头设置为采集中状态
-                        res, file_path = make_patient_dir(body_obj)
-                        start_video_record(file_path)
+                    if RECORD_IN_PROGRESS is False:
+                        body = data[12:]
+                        if len(body) > 0:
+                            # 字符串转json
+                            body_obj = json.loads(body)
+                            print("json:", body_obj)
+                            # 将摄像头设置为采集中状态
+                            res, file_path = make_patient_dir(body_obj)
+                            start_video_record(file_path)
+                    else:
+                        print("视频正在录制无法重复启动线程")
                 elif msg_id == MSG_Video_Stop:
                     global RECORD_STOP_SIG
                     MSG_id_bytes = MSG_Save_Stop_Ack
                     RECORD_STOP_SIG = True
+                    print("收到录制结束信号")
     else:
         status = 4
     if msg_id == MSG_Open_DepthCamera:
@@ -250,11 +255,15 @@ def get_return(data):
             thread1.start()
             status = 0
             CAMERA_IS_OPEN = True
+        else:
+            print("摄像头已开启")
     if msg_id == MSG_Backup:
             if BACKUP_IN_PROGRESS is False:
                 MSG_id_bytes = MSG_Backup_Ack
                 thread_backup = Thread(target=upload_files)
                 thread_backup.start()
+            else:
+                print("系统正在备份")
     # 创建一个json对象
     json_obj = {}
     # json返回的status为当前全局status
@@ -279,9 +288,8 @@ def write_start_log():
     file.close()
 
 def start_video_record(path):
-    if RECORD_IN_PROGRESS is False:
-        thread = Thread(target=video_record_threading, args=(path,))
-        thread.start()
+    thread = Thread(target=video_record_threading, args=(path,))
+    thread.start()
 
 def video_record_threading(path):
     global RECORD_STOP_SIG, RECORD_IN_PROGRESS
@@ -290,18 +298,28 @@ def video_record_threading(path):
     t = time.time()
     out = cv2.VideoWriter(os.path.join(path, str(t) + '.avi'), fourcc, 30, (640, 480))
     try:
+        ts = time.time()
         while True:
             if RECORD_STOP_SIG:
+                break
+            te = time.time()
+            sec = datetime.datetime.fromtimestamp(ts)-datetime.datetime.fromtimestamp(te)
+            if int(sec.seconds) > 5:
+                print("五分钟时间到，视频录制结束")
                 break
             out.write(global_nd_rgb)
             time.sleep(0.01)
         out.release()
         RECORD_STOP_SIG = False
         RECORD_IN_PROGRESS = False
+        print("录制结束")
     except:
+        import traceback
+        traceback.print_exc()
         out.release()
         RECORD_STOP_SIG = False
         RECORD_IN_PROGRESS = False
+        print("录制异常结束")
 
 def camera_threading():
     print('sub-thread start')

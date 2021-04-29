@@ -56,7 +56,7 @@ def upload_files():
     print("备份开始\n")
     try:
         sk = socket.socket()
-        sk.connect(('172.18.6.8', 60008))
+        sk.connect(('172.18.6.8', 60000))
         for _, dirs, _ in os.walk(STORE_PATH):
             for dir in dirs:
                 if dir != '':

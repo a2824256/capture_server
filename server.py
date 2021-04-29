@@ -191,8 +191,8 @@ def get_return(data):
                 FIRST_TIPS = False
             else:
                 status = 0
+                global CAPTURE_IN_PROGRESS
                 if msg_id == MSG_Save and CAPTURE_IN_PROGRESS is False:
-                    global CAPTURE_IN_PROGRESS
                     CAPTURE_IN_PROGRESS = True
                     MSG_id_bytes = MSG_Save_Ack_Msg_id
                     try:

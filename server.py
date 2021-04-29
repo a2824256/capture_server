@@ -259,7 +259,7 @@ def get_return(data):
         else:
             print("摄像头已开启")
     if msg_id == MSG_Backup:
-            if BACKUP_IN_PROGRESS is False:
+            if CAMERA_IS_OPEN and BACKUP_IN_PROGRESS is False and RECORD_IN_PROGRESS is False:
                 MSG_id_bytes = MSG_Backup_Ack
                 thread_backup = Thread(target=upload_files)
                 thread_backup.start()

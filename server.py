@@ -166,7 +166,7 @@ def make_patient_dir(json_obj):
     # 获取caseid
     caseid = json_obj['caseId']
     # 获取当前时间戳
-    now = datetime.datetime.now()
+    # now = datetime.datetime.now()
     # 创建本次采样的路径
     file_path = STORE_PATH + '/' + str(patientid) + '_' + str(caseid) + '/'
     # 创建文件夹
